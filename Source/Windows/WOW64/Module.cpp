@@ -220,6 +220,12 @@ namespace Context {
       return Err;
     }
 
+    // In the case of e.g. suspend, the JIT may not yet be initialised in the target thread,
+    // in that case there is nothing to flush.
+    if (!TLS.ThreadState()) {
+      return STATUS_SUCCESS;
+    }
+
     WOW64_CONTEXT TmpWowContext{
       .ContextFlags = WOW64_CONTEXT_FULL | WOW64_CONTEXT_EXTENDED_REGISTERS
     };
