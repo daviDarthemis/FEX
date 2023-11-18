@@ -28,6 +28,7 @@ namespace FEXCore::CPU {
 // TODO: Allow x18 register allocation on Linux in the future to gain one more register.
 
 namespace x64 {
+#if !(defined(__arm64ec__) && defined(EC_SRA))
   // All but x19 and x29 are caller saved
   constexpr std::array<FEXCore::ARMEmitter::Register, 18> SRA = {
     FEXCore::ARMEmitter::Reg::r4, FEXCore::ARMEmitter::Reg::r5,
@@ -55,6 +56,33 @@ namespace x64 {
     {FEXCore::ARMEmitter::Reg::r22, FEXCore::ARMEmitter::Reg::r23},
     {FEXCore::ARMEmitter::Reg::r24, FEXCore::ARMEmitter::Reg::r25},
   }};
+#else
+   constexpr std::array<FEXCore::ARMEmitter::Register, 18> SRA = {
+    FEXCore::ARMEmitter::Reg::r8, FEXCore::ARMEmitter::Reg::r0,
+    FEXCore::ARMEmitter::Reg::r1, FEXCore::ARMEmitter::Reg::r27,
+    FEXCore::ARMEmitter::Reg::r28, /* ARBITRARY */ FEXCore::ARMEmitter::Reg::r29,
+    FEXCore::ARMEmitter::Reg::r25, FEXCore::ARMEmitter::Reg::r26,
+    FEXCore::ARMEmitter::Reg::r2, FEXCore::ARMEmitter::Reg::r3,
+    FEXCore::ARMEmitter::Reg::r4, FEXCore::ARMEmitter::Reg::r5,
+    FEXCore::ARMEmitter::Reg::r19, FEXCore::ARMEmitter::Reg::r20,
+    FEXCore::ARMEmitter::Reg::r21, FEXCore::ARMEmitter::Reg::r22,
+    REG_PF, REG_AF,
+  };
+
+  constexpr std::array<FEXCore::ARMEmitter::Register, 7> RA = {
+    FEXCore::ARMEmitter::Reg::r23, FEXCore::ARMEmitter::Reg::r24,
+    FEXCore::ARMEmitter::Reg::r6, FEXCore::ARMEmitter::Reg::r7,
+    FEXCore::ARMEmitter::Reg::r9, FEXCore::ARMEmitter::Reg::r10,
+    FEXCore::ARMEmitter::Reg::r13, /* r13 is preserved across arm64ec call boundaries */
+  }; /* Leave x14 spare for any data we want to keep in regs between ec calls */
+
+  constexpr std::array<std::pair<FEXCore::ARMEmitter::Register, FEXCore::ARMEmitter::Register>, 3> RAPair = {{
+    {FEXCore::ARMEmitter::Reg::r23, FEXCore::ARMEmitter::Reg::r24},
+    {FEXCore::ARMEmitter::Reg::r6, FEXCore::ARMEmitter::Reg::r7},
+    {FEXCore::ARMEmitter::Reg::r9, FEXCore::ARMEmitter::Reg::r10},
+  }};
+#endif
+
 
   // All are caller saved
   constexpr std::array<FEXCore::ARMEmitter::VRegister, 16> SRAFPR = {
@@ -503,6 +531,7 @@ void Arm64Emitter::LoadConstant(ARMEmitter::Size s, ARMEmitter::Register Reg, ui
 }
 
 void Arm64Emitter::PushCalleeSavedRegisters() {
+#if !(defined(__arm64ec__) && defined(EC_SRA))
   // We need to save pairs of registers
   // We save r19-r30
   const fextl::vector<std::pair<ARMEmitter::XRegister, ARMEmitter::XRegister>> CalleeSaved = {{
@@ -517,7 +546,7 @@ void Arm64Emitter::PushCalleeSavedRegisters() {
   for (auto &RegPair : CalleeSaved) {
     stp<ARMEmitter::IndexType::PRE>(RegPair.first, RegPair.second, ARMEmitter::Reg::rsp, -16);
   }
-
+#endif
   // Additionally we need to store the lower 64bits of v8-v15
   // Here's a fun thing, we can use two ST4 instructions to store everything
   // We just need a single sub to sp before that
@@ -532,9 +561,6 @@ void Arm64Emitter::PushCalleeSavedRegisters() {
 
   uint32_t VectorSaveSize = sizeof(uint64_t) * 8;
   sub(ARMEmitter::Size::i64Bit, ARMEmitter::Reg::rsp, ARMEmitter::Reg::rsp, VectorSaveSize);
-  // SP supporting move
-  // We just saved x19 so it is safe
-  add(ARMEmitter::Size::i64Bit, ARMEmitter::Reg::r19, ARMEmitter::Reg::rsp, 0);
 
   for (auto &RegQuad : FPRs) {
     st4(ARMEmitter::SubRegSize::i64Bit,
@@ -543,7 +569,7 @@ void Arm64Emitter::PushCalleeSavedRegisters() {
         std::get<2>(RegQuad),
         std::get<3>(RegQuad),
         0,
-        ARMEmitter::Reg::r19,
+        ARMEmitter::Reg::rsp,
         32);
   }
 }
@@ -569,6 +595,7 @@ void Arm64Emitter::PopCalleeSavedRegisters() {
         32);
   }
 
+#if !(defined(__arm64ec__) && defined(EC_SRA))
   const fextl::vector<std::pair<ARMEmitter::XRegister, ARMEmitter::XRegister>> CalleeSaved = {{
     {ARMEmitter::XReg::x29, ARMEmitter::XReg::x30},
     {ARMEmitter::XReg::x27, ARMEmitter::XReg::x28},
@@ -581,6 +608,7 @@ void Arm64Emitter::PopCalleeSavedRegisters() {
   for (auto &RegPair : CalleeSaved) {
     ldp<ARMEmitter::IndexType::POST>(RegPair.first, RegPair.second, ARMEmitter::Reg::rsp, 16);
   }
+#endif
 }
 
 void Arm64Emitter::SpillStaticRegs(FEXCore::ARMEmitter::Register TmpReg, bool FPRs, uint32_t GPRSpillMask, uint32_t FPRSpillMask) {
@@ -619,6 +647,12 @@ void Arm64Emitter::SpillStaticRegs(FEXCore::ARMEmitter::Register TmpReg, bool FP
   uint32_t PFAFMask = ((1u << REG_PF.Idx()) | ((1u << REG_AF.Idx())));
   unsigned PFAFSpillMask = GPRSpillMask & PFAFMask;
   GPRSpillMask &= ~PFAFSpillMask;
+
+#if defined(__arm64ec__) && defined(EC_SRA)
+  // These registers are disallowed outside of JIT
+  GPRSpillMask &= ~((1U << 13) | (1U << 14) | (1U << 23) | (1U << 24) | (1U << 28));
+  FPRSpillMask &= ~(0xffff0000U);
+#endif
 
   for (size_t i = 0; i < StaticRegisters.size(); i+=2) {
     auto Reg1 = StaticRegisters[i];
@@ -731,6 +765,12 @@ void Arm64Emitter::FillStaticRegs(bool FPRs, uint32_t GPRFillMask, uint32_t FPRF
   if (!StaticRegisterAllocation()) {
     return;
   }
+
+#if defined(__arm64ec__) && defined(EC_SRA)
+  // These registers are disallowed outside of JIT
+  GPRSpillMask &= ~((1U << 13) | (1U << 14) | (1U << 23) | (1U << 24) | (1U << 28));
+  FPRSpillMask &= ~(0xffff0000U);
+#endif
 
   if (FPRs) {
     // Set up predicate registers.

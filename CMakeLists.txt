@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.14)
-project(FEX)
+project(FEX C CXX ASM)
 
 INCLUDE (CheckIncludeFiles)
 CHECK_INCLUDE_FILES ("gdb/jit-reader.h" HAVE_GDB_JIT_READER_H)
@@ -120,6 +120,11 @@ endif()
 if (CMAKE_SYSTEM_PROCESSOR MATCHES "^aarch64|^arm64|^armv8\.*")
   set(_M_ARM_64 1)
   add_definitions(-D_M_ARM_64=1)
+endif()
+
+if (CMAKE_SYSTEM_PROCESSOR MATCHES "^arm64ec")
+  set(_M_ARM_64EC 1)
+  add_definitions(-D_M_ARM_64EC=1)
 endif()
 
 if (ENABLE_CCACHE)

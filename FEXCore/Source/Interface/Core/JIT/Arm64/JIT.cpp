@@ -84,6 +84,7 @@ void Arm64JITCore::Op_Unhandled(IR::IROp_Header const *IROp, IR::NodeID Node) {
 #endif
   } else {
     switch(Info.ABI) {
+#if !(defined(__arm64ec__) && defined(EC_SRA))
       case FABI_F80_I16_F32:{
         SpillForABICall(Info.SupportsPreserveAllABI, TMP1, true);
 
@@ -468,12 +469,11 @@ void Arm64JITCore::Op_Unhandled(IR::IROp_Header const *IROp, IR::NodeID Node) {
         mov(Dst.W(), ARMEmitter::WReg::w0);
         break;
       }
+#endif
       case FABI_UNKNOWN:
       default:
-#if defined(ASSERTIONS_ENABLED) && ASSERTIONS_ENABLED
         LOGMAN_MSG_A_FMT("Unhandled IR Fallback ABI: {} {}",
                          FEXCore::IR::GetName(IROp->Op), ToUnderlying(Info.ABI));
-#endif
       break;
     }
   }
@@ -506,8 +506,8 @@ static uint64_t Arm64JITCore_ExitFunctionLink(FEXCore::Core::CpuStateFrame *Fram
     Thread->LookupCache->AddBlockLink(GuestRip, (uintptr_t)record, [branch, LinkerAddress]{
       FEXCore::ARMEmitter::Emitter emit((uint8_t*)(branch), 24);
       FEXCore::ARMEmitter::ForwardLabel l_BranchHost;
-      emit.ldr(FEXCore::ARMEmitter::XReg::x0, &l_BranchHost);
-      emit.blr(FEXCore::ARMEmitter::Reg::r0);
+      emit.ldr(TMP1, &l_BranchHost);
+      emit.blr(TMP1);
       emit.Bind(&l_BranchHost);
       emit.dc64(LinkerAddress);
       FEXCore::ARMEmitter::Emitter::ClearICache((void*)branch, 24);
@@ -762,8 +762,8 @@ CPUBackend::CompiledCode Arm64JITCore::CompileCode(uint64_t Entry,
     if (vixl::aarch64::Assembler::IsImmAddSub(TotalSpillSlotsSize)) {
       sub(ARMEmitter::Size::i64Bit, ARMEmitter::Reg::rsp, ARMEmitter::Reg::rsp, TotalSpillSlotsSize);
     } else {
-      LoadConstant(ARMEmitter::Size::i64Bit, ARMEmitter::Reg::r0, TotalSpillSlotsSize);
-      sub(ARMEmitter::Size::i64Bit, ARMEmitter::XReg::rsp, ARMEmitter::XReg::rsp, ARMEmitter::XReg::x0, ARMEmitter::ExtendedType::LSL_64, 0);
+      LoadConstant(ARMEmitter::Size::i64Bit, TMP1, TotalSpillSlotsSize);
+      sub(ARMEmitter::Size::i64Bit, ARMEmitter::XReg::rsp, ARMEmitter::XReg::rsp, TMP1, ARMEmitter::ExtendedType::LSL_64, 0);
     }
   }
 
@@ -909,8 +909,8 @@ void Arm64JITCore::ResetStack() {
     add(ARMEmitter::Size::i64Bit, ARMEmitter::Reg::rsp, ARMEmitter::Reg::rsp, TotalSpillSlotsSize);
   } else {
     // Too big to fit in a 12bit immediate
-    LoadConstant(ARMEmitter::Size::i64Bit, ARMEmitter::Reg::r0, TotalSpillSlotsSize);
-    add(ARMEmitter::Size::i64Bit, ARMEmitter::XReg::rsp, ARMEmitter::XReg::rsp, ARMEmitter::XReg::x0, ARMEmitter::ExtendedType::LSL_64, 0);
+    LoadConstant(ARMEmitter::Size::i64Bit, TMP1, TotalSpillSlotsSize);
+    add(ARMEmitter::Size::i64Bit, ARMEmitter::XReg::rsp, ARMEmitter::XReg::rsp, TMP1, ARMEmitter::ExtendedType::LSL_64, 0);
   }
 }
 

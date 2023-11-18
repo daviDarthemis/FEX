@@ -36,12 +36,34 @@ namespace FEXCore::CPU {
 // Contains the address to the currently available CPU state
 constexpr auto STATE = FEXCore::ARMEmitter::XReg::x28;
 
+#if !(defined(__arm64ec__) && defined(EC_SRA))
 // GPR temporaries. Only x3 can be used across spill boundaries
 // so if these ever need to change, be very careful about that.
 constexpr auto TMP1 = FEXCore::ARMEmitter::XReg::x0;
 constexpr auto TMP2 = FEXCore::ARMEmitter::XReg::x1;
 constexpr auto TMP3 = FEXCore::ARMEmitter::XReg::x2;
 constexpr auto TMP4 = FEXCore::ARMEmitter::XReg::x3;
+constexpr bool PERSIST_ABIARGS = true;
+
+// We pin r26/r27 as PF/AF respectively, this is internal FEX ABI.
+constexpr auto REG_PF = FEXCore::ARMEmitter::Reg::r26;
+constexpr auto REG_AF = FEXCore::ARMEmitter::Reg::r27;
+#else
+constexpr auto TMP1 = FEXCore::ARMEmitter::XReg::x14;
+constexpr auto TMP2 = FEXCore::ARMEmitter::XReg::x15;
+constexpr auto TMP3 = FEXCore::ARMEmitter::XReg::x16;
+constexpr auto TMP4 = FEXCore::ARMEmitter::XReg::x17;
+constexpr bool PERSIST_ABIARGS = false;
+
+// We pin r11/r12 as PF/AF respectively for arm64ec, as r26/r27 are used for SRA.
+constexpr auto REG_PF = FEXCore::ARMEmitter::Reg::r11;
+constexpr auto REG_AF = FEXCore::ARMEmitter::Reg::r12;
+#endif
+
+constexpr auto PERSIST1 = TMP1;
+constexpr auto PERSIST2 = TMP2;
+constexpr auto PERSIST3 = TMP3;
+constexpr auto PERSIST4 = TMP4;
 
 // Vector temporaries
 constexpr auto VTMP1 = FEXCore::ARMEmitter::VReg::v0;
@@ -53,9 +75,6 @@ constexpr auto VTMP2 = FEXCore::ARMEmitter::VReg::v1;
 constexpr FEXCore::ARMEmitter::PRegister PRED_TMP_16B = FEXCore::ARMEmitter::PReg::p6;
 constexpr FEXCore::ARMEmitter::PRegister PRED_TMP_32B = FEXCore::ARMEmitter::PReg::p7;
 
-// We pin r26/r27 as PF/AF respectively, this is internal FEX ABI.
-constexpr auto REG_PF = FEXCore::ARMEmitter::Reg::r26;
-constexpr auto REG_AF = FEXCore::ARMEmitter::Reg::r27;
 
 // This class contains common emitter utility functions that can
 // be used by both Arm64 JIT and ARM64 Dispatcher

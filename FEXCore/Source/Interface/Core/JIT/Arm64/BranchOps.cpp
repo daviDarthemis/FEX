@@ -52,32 +52,57 @@ DEF_OP(ExitFunction) {
 
   uint64_t NewRIP;
 
+#ifdef __arm64ec__
+  ARMEmitter::ForwardLabel l_Return;
+#endif
+  ARMEmitter::Register RipReg{TMP2};
   if (IsInlineConstant(Op->NewRIP, &NewRIP) || IsInlineEntrypointOffset(Op->NewRIP, &NewRIP)) {
-    ARMEmitter::ForwardLabel l_BranchHost;
-    ARMEmitter::ForwardLabel l_BranchGuest;
+#ifdef __arm64ec__
+    if (RtlIsEcCode(NewRIP)) {
+      LoadConstant(ARMEmitter::Size::i64Bit, RipReg, NewRIP);
+    } else {
+#endif
+      ARMEmitter::ForwardLabel l_BranchHost;
+      ARMEmitter::ForwardLabel l_BranchGuest;
 
-    ldr(ARMEmitter::XReg::x0, &l_BranchHost);
-    blr(ARMEmitter::Reg::r0);
+      ldr(TMP1, &l_BranchHost);
+      blr(TMP1);
 
-    Bind(&l_BranchHost);
-    dc64(ThreadState->CurrentFrame->Pointers.Common.ExitFunctionLinker);
-    Bind(&l_BranchGuest);
-    dc64(NewRIP);
-
+      Bind(&l_BranchHost);
+      dc64(ThreadState->CurrentFrame->Pointers.Common.ExitFunctionLinker);
+      Bind(&l_BranchGuest);
+      dc64(NewRIP);
+#ifdef __arm64ec__
+    }
+#endif
   } else {
-
     ARMEmitter::ForwardLabel FullLookup;
-    auto RipReg = GetReg(Op->NewRIP.ID());
+    RipReg = GetReg(Op->NewRIP.ID());
+
+#ifdef __arm64ec__
+    // Check if target is arm64ec code: TODO: make this a func??
+    ldr(TMP1, ARMEmitter::XReg::x18, 0x60); // NtCurrentTeb()->PEB
+    ldr(TMP1, TMP1, 0x368); // PEB->EcCodeBitMap
+    lsr(ARMEmitter::Size::i64Bit, TMP2, RipReg.X(), 15);
+    and_(ARMEmitter::Size::i64Bit, TMP2, TMP2, 0x1FFFFFFFFFFF8);
+    ldr(TMP1, TMP1, TMP2, ARMEmitter::ExtendedType::LSL_64, 0);
+    lsr(ARMEmitter::Size::i64Bit, TMP2, RipReg.X(), 12);
+    lsrv(ARMEmitter::Size::i64Bit, TMP1, TMP1, TMP2);
+    and_(ARMEmitter::Size::i64Bit, TMP1, TMP1, 1);
+    LoadConstant(ARMEmitter::Size::i64Bit, TMP2, 1);
+    sub(ARMEmitter::Size::i32Bit, TMP1, TMP1, TMP2);
+    cbz(ARMEmitter::Size::i32Bit, TMP1, &l_Return);
+#endif
 
     // L1 Cache
-    ldr(ARMEmitter::XReg::x0, STATE, offsetof(FEXCore::Core::CpuStateFrame, Pointers.Common.L1Pointer));
+    ldr(TMP1, STATE, offsetof(FEXCore::Core::CpuStateFrame, Pointers.Common.L1Pointer));
 
-    and_(ARMEmitter::Size::i64Bit, ARMEmitter::Reg::r3, RipReg, LookupCache::L1_ENTRIES_MASK);
-    add(ARMEmitter::XReg::x0, ARMEmitter::XReg::x0, ARMEmitter::XReg::x3, ARMEmitter::ShiftType::LSL, 4);
+    and_(ARMEmitter::Size::i64Bit, TMP4, RipReg, LookupCache::L1_ENTRIES_MASK);
+    add(TMP1, TMP1, TMP4, ARMEmitter::ShiftType::LSL, 4);
 
     // Note: sub+cbnz used over cmp+br to preserve flags.
-    ldp<ARMEmitter::IndexType::OFFSET>(ARMEmitter::XReg::x1, ARMEmitter::XReg::x0, ARMEmitter::Reg::r0, 0);
-    sub(TMP1, ARMEmitter::XReg::x0, RipReg.X());
+    ldp<ARMEmitter::IndexType::OFFSET>(TMP2, TMP1, TMP1, 0);
+    sub(TMP1, TMP1, RipReg.X());
     cbnz(ARMEmitter::Size::i64Bit, TMP1, &FullLookup);
     br(ARMEmitter::Reg::r1);
 
@@ -86,6 +111,18 @@ DEF_OP(ExitFunction) {
     str(RipReg.X(), STATE, offsetof(FEXCore::Core::CpuStateFrame, State.rip));
     br(TMP1);
   }
+
+#ifdef __arm64ec__
+  Bind(&l_Return);
+  //TODO: EC_SRA
+
+  str(RipReg.X(), STATE, offsetof(FEXCore::Core::CpuStateFrame, State.rip));
+  SpillStaticRegs(TMP1);
+  ldr(ARMEmitter::XReg::x0, STATE, offsetof(FEXCore::Core::CpuStateFrame, ReturningStackLocation));
+  add(ARMEmitter::Size::i64Bit, ARMEmitter::Reg::rsp, ARMEmitter::Reg::r0, 0);
+  PopCalleeSavedRegisters();
+  ret();
+#endif
 }
 
 DEF_OP(Jump) {
@@ -353,58 +390,62 @@ DEF_OP(ValidateCode) {
   int idx = 0;
 
   LoadConstant(ARMEmitter::Size::i64Bit, GetReg(Node), 0);
-  LoadConstant(ARMEmitter::Size::i64Bit, ARMEmitter::Reg::r0, Entry + Op->Offset);
-  LoadConstant(ARMEmitter::Size::i64Bit, ARMEmitter::Reg::r1, 1);
+  LoadConstant(ARMEmitter::Size::i64Bit, TMP1, Entry + Op->Offset);
+  LoadConstant(ARMEmitter::Size::i64Bit, TMP2, 1);
 
   const auto Dst = GetReg(Node);
 
   while (len >= 8)
   {
-    ldr(ARMEmitter::XReg::x2, ARMEmitter::Reg::r0, idx);
-    LoadConstant(ARMEmitter::Size::i64Bit, ARMEmitter::Reg::r3, *(const uint32_t *)(OldCode + idx));
-    cmp(ARMEmitter::Size::i64Bit, ARMEmitter::Reg::r2, ARMEmitter::Reg::r3);
-    csel(ARMEmitter::Size::i64Bit, Dst, Dst, ARMEmitter::Reg::r1, ARMEmitter::Condition::CC_EQ);
+    ldr(ARMEmitter::XReg::x2, TMP1, idx);
+    LoadConstant(ARMEmitter::Size::i64Bit, TMP4, *(const uint32_t *)(OldCode + idx));
+    cmp(ARMEmitter::Size::i64Bit, TMP3, TMP4);
+    csel(ARMEmitter::Size::i64Bit, Dst, Dst, TMP2, ARMEmitter::Condition::CC_EQ);
     len -= 8;
     idx += 8;
   }
   while (len >= 4)
   {
-    ldr(ARMEmitter::WReg::w2, ARMEmitter::Reg::r0, idx);
-    LoadConstant(ARMEmitter::Size::i64Bit, ARMEmitter::Reg::r3, *(const uint32_t *)(OldCode + idx));
-    cmp(ARMEmitter::Size::i32Bit, ARMEmitter::Reg::r2, ARMEmitter::Reg::r3);
-    csel(ARMEmitter::Size::i64Bit, Dst, Dst, ARMEmitter::Reg::r1, ARMEmitter::Condition::CC_EQ);
+    ldr(ARMEmitter::WReg::w2, TMP1, idx);
+    LoadConstant(ARMEmitter::Size::i64Bit, TMP4, *(const uint32_t *)(OldCode + idx));
+    cmp(ARMEmitter::Size::i32Bit, TMP3, TMP4);
+    csel(ARMEmitter::Size::i64Bit, Dst, Dst, TMP2, ARMEmitter::Condition::CC_EQ);
     len -= 4;
     idx += 4;
   }
   while (len >= 2)
   {
-    ldrh(ARMEmitter::Reg::r2, ARMEmitter::Reg::r0, idx);
-    LoadConstant(ARMEmitter::Size::i64Bit, ARMEmitter::Reg::r3, *(const uint16_t *)(OldCode + idx));
-    cmp(ARMEmitter::Size::i32Bit, ARMEmitter::Reg::r2, ARMEmitter::Reg::r3);
-    csel(ARMEmitter::Size::i64Bit, Dst, Dst, ARMEmitter::Reg::r1, ARMEmitter::Condition::CC_EQ);
+    ldrh(TMP3, TMP1, idx);
+    LoadConstant(ARMEmitter::Size::i64Bit, TMP4, *(const uint16_t *)(OldCode + idx));
+    cmp(ARMEmitter::Size::i32Bit, TMP3, TMP4);
+    csel(ARMEmitter::Size::i64Bit, Dst, Dst, TMP2, ARMEmitter::Condition::CC_EQ);
     len -= 2;
     idx += 2;
   }
   while (len >= 1)
   {
-    ldrb(ARMEmitter::Reg::r2, ARMEmitter::Reg::r0, idx);
-    LoadConstant(ARMEmitter::Size::i64Bit, ARMEmitter::Reg::r3, *(const uint8_t *)(OldCode + idx));
-    cmp(ARMEmitter::Size::i32Bit, ARMEmitter::Reg::r2, ARMEmitter::Reg::r3);
-    csel(ARMEmitter::Size::i64Bit, Dst, Dst, ARMEmitter::Reg::r1, ARMEmitter::Condition::CC_EQ);
+    ldrb(TMP3, TMP1, idx);
+    LoadConstant(ARMEmitter::Size::i64Bit, TMP4, *(const uint8_t *)(OldCode + idx));
+    cmp(ARMEmitter::Size::i32Bit, TMP3, TMP4);
+    csel(ARMEmitter::Size::i64Bit, Dst, Dst, TMP2, ARMEmitter::Condition::CC_EQ);
     len -= 1;
     idx += 1;
   }
 }
 
 DEF_OP(ThreadRemoveCodeEntry) {
-  // Arguments are passed as follows:
-  // X0: Thread
-  // X1: RIP
+  mov(ARMEmitter::Size::i64Bit, PERSIST1, STATE.R());
 
   PushDynamicRegsAndLR(TMP1);
   SpillStaticRegs(TMP1);
 
-  mov(ARMEmitter::Size::i64Bit, ARMEmitter::Reg::r0, STATE.R());
+  // Arguments are passed as follows:
+  // X0: Thread
+  // X1: RIP
+  if (!PERSIST_ABIARGS) {
+    mov(ARMEmitter::Size::i64Bit, ARMEmitter::Reg::r0, PERSIST1);
+  }
+
   LoadConstant(ARMEmitter::Size::i64Bit, ARMEmitter::Reg::r1, Entry);
 
   ldr(ARMEmitter::XReg::x2, STATE, offsetof(FEXCore::Core::CpuStateFrame, Pointers.Common.ThreadRemoveCodeEntryFromJIT));
@@ -423,6 +464,9 @@ DEF_OP(ThreadRemoveCodeEntry) {
 DEF_OP(CPUID) {
   auto Op = IROp->C<IR::IROp_CPUID>();
 
+  mov(ARMEmitter::Size::i64Bit, PERSIST2, GetReg(Op->Function.ID()));
+  mov(ARMEmitter::Size::i64Bit, PERSIST3, GetReg(Op->Leaf.ID()));
+
   PushDynamicRegsAndLR(TMP1);
   SpillStaticRegs(TMP1);
 
@@ -431,13 +475,22 @@ DEF_OP(CPUID) {
   // x2 = CPUID Leaf
   ldr(ARMEmitter::XReg::x0, STATE, offsetof(FEXCore::Core::CpuStateFrame, Pointers.Common.CPUIDObj));
   ldr(ARMEmitter::XReg::x3, STATE, offsetof(FEXCore::Core::CpuStateFrame, Pointers.Common.CPUIDFunction));
-  mov(ARMEmitter::Size::i64Bit, ARMEmitter::Reg::r1, GetReg(Op->Function.ID()));
-  mov(ARMEmitter::Size::i64Bit, ARMEmitter::Reg::r2, GetReg(Op->Leaf.ID()));
+
+  if (!PERSIST_ABIARGS) {
+    mov(ARMEmitter::Size::i64Bit, ARMEmitter::Reg::r2, PERSIST2);
+    mov(ARMEmitter::Size::i64Bit, ARMEmitter::Reg::r3, PERSIST3);
+  }
+
   if (!CTX->Config.DisableVixlIndirectCalls) [[unlikely]] {
     GenerateIndirectRuntimeCall<__uint128_t, void*, uint64_t, uint64_t>(ARMEmitter::Reg::r3);
   }
   else {
     blr(ARMEmitter::Reg::r3);
+  }
+
+  if (!PERSIST_ABIARGS) {
+    mov(ARMEmitter::Size::i64Bit, PERSIST1, ARMEmitter::Reg::r0);
+    mov(ARMEmitter::Size::i64Bit, PERSIST2, ARMEmitter::Reg::r1);
   }
 
   FillStaticRegs();
@@ -447,26 +500,34 @@ DEF_OP(CPUID) {
   // Results are in x0, x1
   // Results want to be in a i64v2 vector
   auto Dst = GetRegPair(Node);
-  mov(ARMEmitter::Size::i64Bit, Dst.first,  ARMEmitter::Reg::r0);
-  mov(ARMEmitter::Size::i64Bit, Dst.second, ARMEmitter::Reg::r1);
+  mov(ARMEmitter::Size::i64Bit, Dst.first,  PERSIST1);
+  mov(ARMEmitter::Size::i64Bit, Dst.second, PERSIST2);
 }
 
 DEF_OP(XGetBV) {
   auto Op = IROp->C<IR::IROp_XGetBV>();
 
+  mov(ARMEmitter::Size::i32Bit, PERSIST2, GetReg(Op->Function.ID()));
+
   PushDynamicRegsAndLR(TMP1);
   SpillStaticRegs(TMP1);
+  if (!PERSIST_ABIARGS) {
+    mov(ARMEmitter::Size::i32Bit, ARMEmitter::Reg::r1, PERSIST2);
+  }
 
   // x0 = CPUID Handler
   // x1 = XCR Function
   ldr(ARMEmitter::XReg::x0, STATE, offsetof(FEXCore::Core::CpuStateFrame, Pointers.Common.CPUIDObj));
   ldr(ARMEmitter::XReg::x2, STATE, offsetof(FEXCore::Core::CpuStateFrame, Pointers.Common.XCRFunction));
-  mov(ARMEmitter::Size::i32Bit, ARMEmitter::Reg::r1, GetReg(Op->Function.ID()));
   if (!CTX->Config.DisableVixlIndirectCalls) [[unlikely]] {
     GenerateIndirectRuntimeCall<uint64_t, void*, uint32_t>(ARMEmitter::Reg::r2);
   }
   else {
     blr(ARMEmitter::Reg::r2);
+  }
+
+  if (!PERSIST_ABIARGS) {
+    mov(ARMEmitter::Size::i64Bit, PERSIST1, ARMEmitter::Reg::r0);
   }
 
   FillStaticRegs();
@@ -476,8 +537,8 @@ DEF_OP(XGetBV) {
   // Results are in x0
   // Results want to be in a i32v2 vector
   auto Dst = GetRegPair(Node);
-  mov(ARMEmitter::Size::i32Bit, Dst.first,  ARMEmitter::Reg::r0);
-  lsr(ARMEmitter::Size::i64Bit, Dst.second, ARMEmitter::Reg::r0, 32);
+  mov(ARMEmitter::Size::i32Bit, Dst.first,  PERSIST1);
+  lsr(ARMEmitter::Size::i64Bit, Dst.second, PERSIST1, 32);
 }
 
 #undef DEF_OP
