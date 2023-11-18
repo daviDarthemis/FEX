@@ -111,7 +111,16 @@ void Dispatcher::EmitDispatcher() {
   // We want to ensure that we are 16 byte aligned at the top of this loop
   Align16B();
 #else
+  // NOTE: RIP in x9
   AbsoluteLoopTopAddressFillSRA = GetCursorAddress<uint64_t>();
+  str(ARMEmitter::XReg::x9, STATE_PTR(CpuStateFrame, State.rip));
+
+  PushCalleeSavedRegisters();
+
+  // Save this stack pointer so we can cleanly shutdown the emulation with a long jump
+  // regardless of where we were in the stack
+  add(ARMEmitter::Size::i64Bit, TMP1, ARMEmitter::Reg::rsp, 0);
+  str(TMP1, STATE_PTR(CpuStateFrame, ReturningStackLocation));
 #endif
   ARMEmitter::BiDirectionalLabel FullLookup{};
   ARMEmitter::BiDirectionalLabel CallBlock{};
@@ -121,7 +130,7 @@ void Dispatcher::EmitDispatcher() {
   AbsoluteLoopTopAddress = GetCursorAddress<uint64_t>();
 
   // Load in our RIP
-  // Don't modify TMP3 since it contains our RIP once the block doesn't exist
+  // Don't modify PERSIST3 since it contains our RIP once the block doesn't exist
 
   auto RipReg = PERSIST3;
   ldr(RipReg, STATE_PTR(CpuStateFrame, State.rip));

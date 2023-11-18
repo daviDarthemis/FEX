@@ -89,9 +89,7 @@ DEF_OP(ExitFunction) {
     lsr(ARMEmitter::Size::i64Bit, TMP2, RipReg.X(), 12);
     lsrv(ARMEmitter::Size::i64Bit, TMP1, TMP1, TMP2);
     and_(ARMEmitter::Size::i64Bit, TMP1, TMP1, 1);
-    LoadConstant(ARMEmitter::Size::i64Bit, TMP2, 1);
-    sub(ARMEmitter::Size::i32Bit, TMP1, TMP1, TMP2);
-    cbz(ARMEmitter::Size::i32Bit, TMP1, &l_Return);
+    cbnz(ARMEmitter::Size::i32Bit, TMP1, &l_Return);// tbz?
 #endif
 
     // L1 Cache
@@ -117,9 +115,13 @@ DEF_OP(ExitFunction) {
   //TODO: EC_SRA
 
   str(RipReg.X(), STATE, offsetof(FEXCore::Core::CpuStateFrame, State.rip));
+#ifdef EC_SRA
+  mov(ARMEmitter::XReg::x9, RipReg.X());
+#else
   SpillStaticRegs(TMP1);
-  ldr(ARMEmitter::XReg::x0, STATE, offsetof(FEXCore::Core::CpuStateFrame, ReturningStackLocation));
-  add(ARMEmitter::Size::i64Bit, ARMEmitter::Reg::rsp, ARMEmitter::Reg::r0, 0);
+#endif
+  ldr(TMP1, STATE, offsetof(FEXCore::Core::CpuStateFrame, ReturningStackLocation));
+  add(ARMEmitter::Size::i64Bit, ARMEmitter::Reg::rsp, TMP1, 0);
   PopCalleeSavedRegisters();
   ret();
 #endif

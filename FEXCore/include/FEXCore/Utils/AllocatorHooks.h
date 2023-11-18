@@ -48,7 +48,6 @@ namespace FEXCore::Allocator {
     };
     return ::VirtualAlloc2(nullptr, Base, Size, MEM_COMMIT | (Base ? MEM_RESERVE : 0), Execute ? PAGE_EXECUTE_READWRITE : PAGE_READWRITE, 
                           &Parameter, Execute ? 1 : 0);
-  }
 #else
     return ::VirtualAlloc(Base, Size, MEM_COMMIT | (Base ? MEM_RESERVE : 0), Execute ? PAGE_EXECUTE_READWRITE : PAGE_READWRITE);
 #endif

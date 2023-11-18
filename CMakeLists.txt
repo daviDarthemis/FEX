@@ -125,6 +125,7 @@ endif()
 if (CMAKE_SYSTEM_PROCESSOR MATCHES "^arm64ec")
   set(_M_ARM_64EC 1)
   add_definitions(-D_M_ARM_64EC=1)
+  add_definitions(-DEC_SRA=1)
 endif()
 
 if (ENABLE_CCACHE)
