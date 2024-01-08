@@ -841,18 +841,18 @@ DEF_OP(LDiv) {
 
       // Long divide
       {
-        mov(EmitSize, ARMEmitter::Reg::r0, Upper);
-        mov(EmitSize, ARMEmitter::Reg::r1, Lower);
-        mov(EmitSize, ARMEmitter::Reg::r2, Divisor);
+        mov(EmitSize, TMP1, Upper);
+        mov(EmitSize, TMP2, Lower);
+        mov(EmitSize, TMP3, Divisor);
 
-        ldr(ARMEmitter::XReg::x3, STATE, offsetof(FEXCore::Core::CpuStateFrame, Pointers.AArch64.LDIVHandler));
+        ldr(TMP4, STATE, offsetof(FEXCore::Core::CpuStateFrame, Pointers.AArch64.LDIVHandler));
 
         str<ARMEmitter::IndexType::PRE>(ARMEmitter::XReg::lr, ARMEmitter::Reg::rsp, -16);
-        blr(ARMEmitter::Reg::r3);
+        blr(TMP4);
         ldr<ARMEmitter::IndexType::POST>(ARMEmitter::XReg::lr, ARMEmitter::Reg::rsp, 16);
 
         // Move result to its destination register
-        mov(EmitSize, Dst, ARMEmitter::Reg::r0);
+        mov(EmitSize, Dst, TMP1);
 
         // Skip 64-bit path
         b(&LongDIVRet);
@@ -909,18 +909,18 @@ DEF_OP(LUDiv) {
 
       // Long divide
       {
-        mov(EmitSize, ARMEmitter::Reg::r0, Upper);
-        mov(EmitSize, ARMEmitter::Reg::r1, Lower);
-        mov(EmitSize, ARMEmitter::Reg::r2, Divisor);
+        mov(EmitSize, TMP1, Upper);
+        mov(EmitSize, TMP2, Lower);
+        mov(EmitSize, TMP3, Divisor);
 
-        ldr(ARMEmitter::XReg::x3, STATE, offsetof(FEXCore::Core::CpuStateFrame, Pointers.AArch64.LUDIVHandler));
+        ldr(TMP4, STATE, offsetof(FEXCore::Core::CpuStateFrame, Pointers.AArch64.LUDIVHandler));
 
         str<ARMEmitter::IndexType::PRE>(ARMEmitter::XReg::lr, ARMEmitter::Reg::rsp, -16);
-        blr(ARMEmitter::Reg::r3);
+        blr(TMP4);
         ldr<ARMEmitter::IndexType::POST>(ARMEmitter::XReg::lr, ARMEmitter::Reg::rsp, 16);
 
         // Move result to its destination register
-        mov(EmitSize, Dst, ARMEmitter::Reg::r0);
+        mov(EmitSize, Dst, TMP1);
 
         // Skip 64-bit path
         b(&LongDIVRet);
@@ -985,18 +985,18 @@ DEF_OP(LRem) {
 
       // Long divide
       {
-        mov(EmitSize, ARMEmitter::Reg::r0, Upper);
-        mov(EmitSize, ARMEmitter::Reg::r1, Lower);
-        mov(EmitSize, ARMEmitter::Reg::r2, Divisor);
+        mov(EmitSize, TMP1, Upper);
+        mov(EmitSize, TMP2, Lower);
+        mov(EmitSize, TMP3, Divisor);
 
-        ldr(ARMEmitter::XReg::x3, STATE, offsetof(FEXCore::Core::CpuStateFrame, Pointers.AArch64.LREMHandler));
+        ldr(TMP4, STATE, offsetof(FEXCore::Core::CpuStateFrame, Pointers.AArch64.LREMHandler));
 
         str<ARMEmitter::IndexType::PRE>(ARMEmitter::XReg::lr, ARMEmitter::Reg::rsp, -16);
-        blr(ARMEmitter::Reg::r3);
+        blr(TMP4);
         ldr<ARMEmitter::IndexType::POST>(ARMEmitter::XReg::lr, ARMEmitter::Reg::rsp, 16);
 
         // Move result to its destination register
-        mov(EmitSize, Dst, ARMEmitter::Reg::r0);
+        mov(EmitSize, Dst, TMP1);
 
         // Skip 64-bit path
         b(&LongDIVRet);
@@ -1055,18 +1055,18 @@ DEF_OP(LURem) {
 
       // Long divide
       {
-        mov(EmitSize, ARMEmitter::Reg::r0, Upper);
-        mov(EmitSize, ARMEmitter::Reg::r1, Lower);
-        mov(EmitSize, ARMEmitter::Reg::r2, Divisor);
+        mov(EmitSize, TMP1, Upper);
+        mov(EmitSize, TMP2, Lower);
+        mov(EmitSize, TMP3, Divisor);
 
-        ldr(ARMEmitter::XReg::x3, STATE, offsetof(FEXCore::Core::CpuStateFrame, Pointers.AArch64.LUREMHandler));
+        ldr(TMP4, STATE, offsetof(FEXCore::Core::CpuStateFrame, Pointers.AArch64.LUREMHandler));
 
         str<ARMEmitter::IndexType::PRE>(ARMEmitter::XReg::lr, ARMEmitter::Reg::rsp, -16);
-        blr(ARMEmitter::Reg::r3);
+        blr(TMP4);
         ldr<ARMEmitter::IndexType::POST>(ARMEmitter::XReg::lr, ARMEmitter::Reg::rsp, 16);
 
         // Move result to its destination register
-        mov(EmitSize, Dst, ARMEmitter::Reg::r0);
+        mov(EmitSize, Dst, TMP1);
 
         // Skip 64-bit path
         b(&LongDIVRet);
