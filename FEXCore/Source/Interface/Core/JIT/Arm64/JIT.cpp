@@ -482,12 +482,9 @@ void Arm64JITCore::Op_Unhandled(IR::IROp_Header const *IROp, IR::NodeID Node) {
           blr(ARMEmitter::Reg::r5);
         }
 
-        FillForABICall(Info.SupportsPreserveAllABI, true);
-
-        const auto Dst = GetReg(Node);
-        mov(Dst.W(), ARMEmitter::WReg::w0);
-        break;
+        FillI32Result();
       }
+      break;
       case FABI_UNKNOWN:
       default:
 #if defined(ASSERTIONS_ENABLED) && ASSERTIONS_ENABLED
