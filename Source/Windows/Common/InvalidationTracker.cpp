@@ -28,6 +28,8 @@ void InvalidationTracker::HandleMemoryProtectionNotification(FEXCore::Core::Inte
 
 void InvalidationTracker::InvalidateContainingSection(FEXCore::Core::InternalThreadState *Thread, uint64_t Address, bool Free) {
   MEMORY_BASIC_INFORMATION Info;
+    LogMan::Msg::DFmt("Inv SMC: {:X}", Address);
+
   if (NtQueryVirtualMemory(NtCurrentProcess(), reinterpret_cast<void *>(Address), MemoryBasicInformation, &Info, sizeof(Info), nullptr))
     return;
 
@@ -35,6 +37,7 @@ void InvalidationTracker::InvalidateContainingSection(FEXCore::Core::InternalThr
   const auto SectionSize = reinterpret_cast<uint64_t>(Info.BaseAddress) + Info.RegionSize
                            - reinterpret_cast<uint64_t>(Info.AllocationBase);
   Thread->CTX->InvalidateGuestCodeRange(Thread, SectionBase, SectionSize);
+    LogMan::Msg::DFmt("Inv SMC done: {:X}", Address);
 
   if (Free) {
     std::scoped_lock Lock(RWXIntervalsLock);

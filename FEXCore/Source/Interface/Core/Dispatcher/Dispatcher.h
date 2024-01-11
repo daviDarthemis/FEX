@@ -47,6 +47,7 @@ public:
   uint64_t ThreadStopHandlerAddress{};
   uint64_t ThreadStopHandlerAddressSpillSRA{};
   uint64_t AbsoluteLoopTopAddress{};
+  uint64_t AbsoluteLoopTopAddressECCall{};
   uint64_t AbsoluteLoopTopAddressFillSRA{};
   uint64_t ThreadPauseHandlerAddress{};
   uint64_t ThreadPauseHandlerAddressSpillSRA{};

@@ -8,6 +8,7 @@
 #endif
 
 #ifdef _WIN32
+#define NTDDI_VERSION 0x0A000005
 #include <memoryapi.h>
 #else
 #include <sys/mman.h>
@@ -38,13 +39,24 @@ extern "C" {
 
 namespace FEXCore::Allocator {
 #ifdef _WIN32
-  inline void *VirtualAlloc(size_t Size, bool Execute = false) {
-    return ::VirtualAlloc(nullptr, Size, MEM_COMMIT, Execute ? PAGE_EXECUTE_READWRITE : PAGE_READWRITE);
+  inline void *VirtualAlloc(void* Base, size_t Size, bool Execute = false) {
+#ifdef _M_ARM_64EC
+    MEM_EXTENDED_PARAMETER Parameter{};
+    if (Execute) {
+      Parameter.Type = MemExtendedParameterAttributeFlags;
+      Parameter.ULong64 = MEM_EXTENDED_PARAMETER_EC_CODE;
+    };
+    return ::VirtualAlloc2(nullptr, Base, Size, MEM_COMMIT | (Base ? MEM_RESERVE : 0), Execute ? PAGE_EXECUTE_READWRITE : PAGE_READWRITE,
+                          &Parameter, Execute ? 1 : 0);
+#else
+    return ::VirtualAlloc(Base, Size, MEM_COMMIT | (Base ? MEM_RESERVE : 0), Execute ? PAGE_EXECUTE_READWRITE : PAGE_READWRITE);
+#endif
   }
 
-  inline void *VirtualAlloc(void* Base, size_t Size, bool Execute = false) {
-    return ::VirtualAlloc(Base, Size, MEM_COMMIT | MEM_RESERVE, Execute ? PAGE_EXECUTE_READWRITE : PAGE_READWRITE);
+  inline void *VirtualAlloc(size_t Size, bool Execute = false) {
+    return VirtualAlloc(nullptr, Size, Execute);
   }
+
 
   inline void VirtualFree(void *Ptr, size_t Size) {
     ::VirtualFree(Ptr, Size, MEM_RELEASE);
@@ -79,7 +91,18 @@ namespace FEXCore::Allocator {
 #endif
 
   // Memory allocation routines aliased to jemalloc functions.
-#ifdef _WIN32
+#ifdef ENABLE_JEMALLOC
+  inline void *malloc(size_t size) { return ::je_malloc(size); }
+  inline void *calloc(size_t n, size_t size) { return ::je_calloc(n, size); }
+  inline void *memalign(size_t align, size_t s) { return ::je_memalign(align, s); }
+  inline void *valloc(size_t size) { return ::je_valloc(size); }
+  inline int posix_memalign(void** r, size_t a, size_t s) { return ::je_posix_memalign(r, a, s); }
+  inline void *realloc(void* ptr, size_t size) { return ::je_realloc(ptr, size); }
+  inline void free(void* ptr) { return ::je_free(ptr); }
+  inline size_t malloc_usable_size(void *ptr) { return ::je_malloc_usable_size(ptr); }
+  inline void *aligned_alloc(size_t a, size_t s) { return ::je_aligned_alloc(a, s); }
+  inline void aligned_free(void* ptr) { return ::je_free(ptr); }
+#elif defined(_WIN32)
   inline void *malloc(size_t size) { return ::malloc(size); }
   inline void *calloc(size_t n, size_t size) { return ::calloc(n, size); }
   inline void *memalign(size_t align, size_t s) { return ::_aligned_malloc(s, align); }
@@ -99,17 +122,6 @@ namespace FEXCore::Allocator {
   inline size_t malloc_usable_size(void *ptr) { return ::_msize(ptr); }
   inline void *aligned_alloc(size_t a, size_t s) { return ::_aligned_malloc(s, a); }
   inline void aligned_free(void* ptr) { return ::_aligned_free(ptr); }
-#elif defined(ENABLE_JEMALLOC)
-  inline void *malloc(size_t size) { return ::je_malloc(size); }
-  inline void *calloc(size_t n, size_t size) { return ::je_calloc(n, size); }
-  inline void *memalign(size_t align, size_t s) { return ::je_memalign(align, s); }
-  inline void *valloc(size_t size) { return ::je_valloc(size); }
-  inline int posix_memalign(void** r, size_t a, size_t s) { return ::je_posix_memalign(r, a, s); }
-  inline void *realloc(void* ptr, size_t size) { return ::je_realloc(ptr, size); }
-  inline void free(void* ptr) { return ::je_free(ptr); }
-  inline size_t malloc_usable_size(void *ptr) { return ::je_malloc_usable_size(ptr); }
-  inline void *aligned_alloc(size_t a, size_t s) { return ::je_aligned_alloc(a, s); }
-  inline void aligned_free(void* ptr) { return ::je_free(ptr); }
 #else
   inline void *malloc(size_t size) { return ::malloc(size); }
   inline void *calloc(size_t n, size_t size) { return ::calloc(n, size); }

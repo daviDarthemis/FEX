@@ -288,6 +288,7 @@ namespace FEXCore::Context {
       .DispatcherBegin = Dispatcher->Start,
       .DispatcherEnd = Dispatcher->End,
 
+      .AbsoluteLoopTopAddress = Dispatcher->AbsoluteLoopTopAddress,
       .AbsoluteLoopTopAddressFillSRA = Dispatcher->AbsoluteLoopTopAddressFillSRA,
       .SignalHandlerReturnAddress = Dispatcher->SignalHandlerReturnAddress,
       .SignalHandlerReturnAddressRT = Dispatcher->SignalHandlerReturnAddressRT,
@@ -504,7 +505,11 @@ namespace FEXCore::Context {
   void ContextImpl::InitializeThreadTLSData(FEXCore::Core::InternalThreadState *Thread) {
     // Let's do some initial bookkeeping here
     Thread->ThreadManager.TID = FHU::Syscalls::gettid();
+#ifndef _WIN32
     Thread->ThreadManager.PID = ::getpid();
+#else
+    Thread->ThreadManager.PID = ::_getpid();
+#endif
 
     if (Config.BlockJITNaming() ||
         Config.GlobalJITNaming() ||
@@ -606,6 +611,7 @@ namespace FEXCore::Context {
       Threads.push_back(Thread);
     }
 
+    InitializeThreadTLSData(Thread);
     return Thread;
   }
 
@@ -1012,6 +1018,11 @@ namespace FEXCore::Context {
   }
 
   uintptr_t ContextImpl::CompileBlock(FEXCore::Core::CpuStateFrame *Frame, uint64_t GuestRIP, uint64_t MaxInst) {
+#ifdef _M_ARM_64EC
+    if (Frame->Thread->LookupCache->CheckPageEC(GuestRIP))
+      return;
+#endif
+
     FEXCORE_PROFILE_SCOPED("CompileBlock");
     auto Thread = Frame->Thread;
 
@@ -1021,6 +1032,7 @@ namespace FEXCore::Context {
     // Is the code in the cache?
     // The backends only check L1 and L2, not L3
     if (auto HostCode = Thread->LookupCache->FindBlock(GuestRIP)) {
+      LogMan::Msg::EFmt("CompileBlockJit: Compile {:X} {:X}", GuestRIP, (uintptr_t)HostCode);
       return HostCode;
     }
 
@@ -1107,6 +1119,7 @@ namespace FEXCore::Context {
     // Insert to lookup cache
     // Pages containing this block are added via AddBlockExecutableRange before each page gets accessed in the frontend
     AddBlockMapping(Thread, GuestRIP, CodePtr);
+    LogMan::Msg::EFmt("CompileBlockJit: Compile {:X} {:X}", GuestRIP, (uintptr_t)CodePtr);
 
     return (uintptr_t)CodePtr;
   }
