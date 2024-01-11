@@ -76,16 +76,13 @@ void Dispatcher::EmitDispatcher() {
 
   DispatchPtr = GetCursorAddress<AsmDispatch>();
 
-  // while (true) {
-  //    Ptr = FindBlock(RIP)
-  //    if (!Ptr)
-  //      Ptr = CTX->CompileBlock(RIP);
-  //
-  //    Ptr();
-  // }
-
   ARMEmitter::ForwardLabel l_CTX;
   ARMEmitter::ForwardLabel l_Sleep;
+#ifdef _M_ARM_64EC
+  static constexpr size_t TEBCPUAreaOffset = 0x1788;
+  static constexpr size_t CPUAreaInSyscallCallbackOffset = 0x1;
+  ARMEmitter::ForwardLabel ExitEC;
+#endif
   ARMEmitter::ForwardLabel l_CompileBlock;
 
   // Push all the register we need to save
@@ -107,6 +104,13 @@ void Dispatcher::EmitDispatcher() {
     FillStaticRegs();
   }
 
+  // while (true) {
+  //    Ptr = FindBlock(RIP)
+  //    if (!Ptr)
+  //      Ptr = CTX->CompileBlock(RIP);
+  //
+  //    Ptr();
+  // }
   // We want to ensure that we are 16 byte aligned at the top of this loop
   Align16B();
   ARMEmitter::BiDirectionalLabel FullLookup{};
@@ -161,6 +165,9 @@ void Dispatcher::EmitDispatcher() {
 
     // If page pointer is zero then we have no block
     cbz(ARMEmitter::Size::i64Bit, TMP1, &NoBlock);
+#ifdef _M_ARM_64EC
+    tbnz(TMP1, 0, &ExitEC);
+#endif
 
     // Steal the page offset
     and_(ARMEmitter::Size::i64Bit, TMP2, TMP4, 0x0FFF);
@@ -194,6 +201,14 @@ void Dispatcher::EmitDispatcher() {
     }
   }
 
+#ifdef _M_ARM_64EC
+  {
+    Bind(&ExitEC);
+    ldr(TMP2, STATE_PTR(CpuStateFrame, Pointers.Common.ExitFunctionEC));
+    br(TMP2);
+  }
+#endif
+
   {
     ThreadStopHandlerAddressSpillSRA = GetCursorAddress<uint64_t>();
     if (config.StaticRegisterAllocation)
@@ -217,6 +232,13 @@ void Dispatcher::EmitDispatcher() {
     add(ARMEmitter::Size::i64Bit, ARMEmitter::XReg::x0, ARMEmitter::XReg::x0, 1);
     str(ARMEmitter::XReg::x0, STATE, offsetof(FEXCore::Core::CPUState, DeferredSignalRefCount));
 
+#ifdef _M_ARM_64EC
+    // Disable NTDLL syscall callbacks when compiling
+    ldr(ARMEmitter::XReg::x0, ARMEmitter::XReg::x18, TEBCPUAreaOffset);
+    LoadConstant(ARMEmitter::Size::i32Bit, ARMEmitter::Reg::r1, 1);
+    strb(ARMEmitter::WReg::w1, ARMEmitter::XReg::x0, CPUAreaInSyscallCallbackOffset);
+#endif
+
     mov(ARMEmitter::XReg::x0, STATE);
     mov(ARMEmitter::XReg::x1, ARMEmitter::XReg::lr);
 
@@ -234,6 +256,11 @@ void Dispatcher::EmitDispatcher() {
 
     if (config.StaticRegisterAllocation)
       FillStaticRegs();
+
+#ifdef _M_ARM_64EC
+    ldr(TMP2, ARMEmitter::XReg::x18, TEBCPUAreaOffset);
+    strb(ARMEmitter::WReg::zr, TMP2, CPUAreaInSyscallCallbackOffset);
+#endif
 
     ldr(TMP2, STATE, offsetof(FEXCore::Core::CPUState, DeferredSignalRefCount));
     sub(ARMEmitter::Size::i64Bit, TMP2, TMP2, 1);
@@ -261,6 +288,13 @@ void Dispatcher::EmitDispatcher() {
     add(ARMEmitter::Size::i64Bit, ARMEmitter::XReg::x0, ARMEmitter::XReg::x0, 1);
     str(ARMEmitter::XReg::x0, STATE, offsetof(FEXCore::Core::CPUState, DeferredSignalRefCount));
 
+#ifdef _M_ARM_64EC
+    // Disable NTDLL syscall callbacks when compiling
+    ldr(ARMEmitter::XReg::x0, ARMEmitter::XReg::x18, TEBCPUAreaOffset);
+    LoadConstant(ARMEmitter::Size::i32Bit, ARMEmitter::Reg::r1, 1);
+    strb(ARMEmitter::WReg::w1, ARMEmitter::XReg::x0, CPUAreaInSyscallCallbackOffset);
+#endif
+
     ldr(ARMEmitter::XReg::x0, &l_CTX);
     mov(ARMEmitter::XReg::x1, STATE);
     ldr(ARMEmitter::XReg::x3, &l_CompileBlock);
@@ -275,6 +309,11 @@ void Dispatcher::EmitDispatcher() {
 
     if (config.StaticRegisterAllocation)
       FillStaticRegs();
+
+#ifdef _M_ARM_64EC
+    ldr(TMP1, ARMEmitter::XReg::x18, TEBCPUAreaOffset);
+    strb(ARMEmitter::WReg::zr, TMP1, CPUAreaInSyscallCallbackOffset);
+#endif
 
     ldr(TMP1, STATE, offsetof(FEXCore::Core::CPUState, DeferredSignalRefCount));
     sub(ARMEmitter::Size::i64Bit, TMP1, TMP1, 1);

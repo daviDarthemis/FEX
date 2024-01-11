@@ -1323,7 +1323,7 @@ private:
 
       // Insert as NZCV.
       signed RmifBit = Bit - 28;
-      _RmifNZCV(Value, (64 + FlagOffset - RmifBit) % 64, 1u << RmifBit);
+      _RmifNZCV(Value, (64 + FlagOffset - RmifBit) & 63, 1u << RmifBit);
       CachedNZCV = nullptr;
     } else {
       // Insert as GPR

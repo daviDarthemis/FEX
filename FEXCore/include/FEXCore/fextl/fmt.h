@@ -81,6 +81,10 @@ namespace fextl::fmt {
   FMT_INLINE auto print(std::FILE* f, ::fmt::format_string<T...> fmt, T&&... args)
       -> void {
     auto String = fextl::fmt::vformat(fmt, ::fmt::make_format_args(args...));
+#ifndef _WIN32
     write(fileno(f), String.c_str(), String.size());
+#else
+    write(_fileno(f), String.c_str(), String.size());
+#endif
   }
 }

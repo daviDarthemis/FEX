@@ -53,16 +53,26 @@ DEF_OP(ExitFunction) {
   uint64_t NewRIP;
 
   if (IsInlineConstant(Op->NewRIP, &NewRIP) || IsInlineEntrypointOffset(Op->NewRIP, &NewRIP)) {
-    ARMEmitter::ForwardLabel l_BranchHost;
-    ARMEmitter::ForwardLabel l_BranchGuest;
+#ifdef _M_ARM_64EC
+    if (RtlIsEcCode(NewRIP)) {
+      LoadConstant(ARMEmitter::Size::i64Bit, TMP3, NewRIP);
+      ldr(TMP2, STATE_PTR(CpuStateFrame, Pointers.Common.ExitFunctionEC));
+      br(TMP2);
+    } else {
+#endif
+      ARMEmitter::ForwardLabel l_BranchHost;
+      ARMEmitter::ForwardLabel l_BranchGuest;
 
-    ldr(TMP1, &l_BranchHost);
-    blr(TMP1);
+      ldr(TMP1, &l_BranchHost);
+      blr(TMP1);
 
-    Bind(&l_BranchHost);
-    dc64(ThreadState->CurrentFrame->Pointers.Common.ExitFunctionLinker);
-    Bind(&l_BranchGuest);
-    dc64(NewRIP);
+      Bind(&l_BranchHost);
+      dc64(ThreadState->CurrentFrame->Pointers.Common.ExitFunctionLinker);
+      Bind(&l_BranchGuest);
+      dc64(NewRIP);
+#ifdef _M_ARM_64EC
+    }
+#endif
   } else {
     ARMEmitter::ForwardLabel FullLookup;
     ARMEmitter::Register RipReg{GetReg(Op->NewRIP.ID())};

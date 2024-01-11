@@ -1947,17 +1947,38 @@ DEF_OP(MemSet) {
       sub(ARMEmitter::Size::i64Bit, TMP2, TMP2, OpSize);
     }
   };
-
+  LogMan::Msg::EFmt("aaaaa");
+  const auto SubRegSize =
+    Size == 1 ? ARMEmitter::SubRegSize::i8Bit :
+    Size == 2 ? ARMEmitter::SubRegSize::i16Bit :
+    Size == 4 ? ARMEmitter::SubRegSize::i32Bit :
+    Size == 8 ? ARMEmitter::SubRegSize::i64Bit : ARMEmitter::SubRegSize::i8Bit;
   auto EmitMemset = [&](int32_t Direction) {
     const int32_t OpSize = Size;
     const int32_t SizeDirection = Size * Direction;
 
-    ARMEmitter::BackwardLabel AgainInternal{};
+    ARMEmitter::BiDirectionalLabel AgainInternal{};
+    ARMEmitter::ForwardLabel AgainInternal128Exit{};
+    ARMEmitter::BackwardLabel AgainInternal128{};
     ARMEmitter::ForwardLabel DoneInternal{};
 
     // Early exit if zero count.
     cbz(ARMEmitter::Size::i64Bit, TMP1, &DoneInternal);
+    and_(ARMEmitter::Size::i64Bit, TMP4, TMP2, 0x3);
+    cbnz(ARMEmitter::Size::i64Bit, TMP4, &AgainInternal);
+    dup(SubRegSize, VTMP2.Q(), Value);
 
+    Bind(&AgainInternal128);
+    sub(ARMEmitter::Size::i64Bit, TMP1, TMP1, 32/Size);
+    tbnz(TMP1, 63, &AgainInternal128Exit);
+    stp<ARMEmitter::IndexType::POST>(VTMP2.Q(), VTMP2.Q(), TMP2, 32 * Direction);
+    b(&AgainInternal128);
+
+
+
+    Bind(&AgainInternal128Exit);
+    add(ARMEmitter::Size::i64Bit, TMP1, TMP1, 32/Size);
+    cbz(ARMEmitter::Size::i64Bit, TMP1, &DoneInternal);
     Bind(&AgainInternal);
     if (Op->IsAtomic) {
       MemStoreTSO(Value, OpSize, SizeDirection);
@@ -2107,6 +2128,10 @@ DEF_OP(MemCpy) {
         ldr<ARMEmitter::IndexType::POST>(TMP4, TMP3, Size);
         str<ARMEmitter::IndexType::POST>(TMP4, TMP2, Size);
         break;
+      case 32:
+        ldp<ARMEmitter::IndexType::POST>(VTMP1.Q(), VTMP2.Q(), TMP3, Size);
+        stp<ARMEmitter::IndexType::POST>(VTMP1.Q(), VTMP2.Q(), TMP2, Size);
+        break;
       default:
         LOGMAN_MSG_A_FMT("Unhandled {} size: {}", __func__, Size);
         break;
@@ -2213,12 +2238,42 @@ DEF_OP(MemCpy) {
     const int32_t OpSize = Size;
     const int32_t SizeDirection = Size * Direction;
 
-    ARMEmitter::BackwardLabel AgainInternal{};
+    ARMEmitter::BiDirectionalLabel AgainInternal{};
+    ARMEmitter::ForwardLabel AgainInternal256Exit{};
+    ARMEmitter::ForwardLabel AgainInternal128Exit{};
+    ARMEmitter::BackwardLabel AgainInternal128{};
+    ARMEmitter::BackwardLabel AgainInternal256{};
     ARMEmitter::ForwardLabel DoneInternal{};
 
     // Early exit if zero count.
     cbz(ARMEmitter::Size::i64Bit, TMP1, &DoneInternal);
+    orr(ARMEmitter::Size::i64Bit, TMP4, TMP2, TMP3);
+    and_(ARMEmitter::Size::i64Bit, TMP4, TMP4, 0x3);
+    cbnz(ARMEmitter::Size::i64Bit, TMP4, &AgainInternal);
+    Bind(&AgainInternal256);
+    sub(ARMEmitter::Size::i64Bit, TMP1, TMP1, 64/Size);
+    tbnz(TMP1, 63, &AgainInternal256Exit);
 
+    MemCpy(32, 32 * Direction);
+    MemCpy(32, 32 * Direction);
+    b(&AgainInternal256);
+
+
+
+    Bind(&AgainInternal256Exit);
+    add(ARMEmitter::Size::i64Bit, TMP1, TMP1, 64/Size);
+    cbz(ARMEmitter::Size::i64Bit, TMP1, &DoneInternal);
+    Bind(&AgainInternal128);
+    sub(ARMEmitter::Size::i64Bit, TMP1, TMP1, 32/Size);
+    tbnz(TMP1, 63, &AgainInternal128Exit);
+    MemCpy(32, 32 * Direction);
+    b(&AgainInternal128);
+
+
+
+    Bind(&AgainInternal128Exit);
+    add(ARMEmitter::Size::i64Bit, TMP1, TMP1, 32/Size);
+    cbz(ARMEmitter::Size::i64Bit, TMP1, &DoneInternal);
     Bind(&AgainInternal);
     if (Op->IsAtomic) {
       MemCpyTSO(OpSize, SizeDirection);

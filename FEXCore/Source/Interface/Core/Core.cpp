@@ -294,6 +294,7 @@ namespace FEXCore::Context {
       .DispatcherBegin = Dispatcher->Start,
       .DispatcherEnd = Dispatcher->End,
 
+      .AbsoluteLoopTopAddress = Dispatcher->AbsoluteLoopTopAddress,
       .AbsoluteLoopTopAddressFillSRA = Dispatcher->AbsoluteLoopTopAddressFillSRA,
       .SignalHandlerReturnAddress = Dispatcher->SignalHandlerReturnAddress,
       .SignalHandlerReturnAddressRT = Dispatcher->SignalHandlerReturnAddressRT,
@@ -515,7 +516,11 @@ namespace FEXCore::Context {
   void ContextImpl::InitializeThreadTLSData(FEXCore::Core::InternalThreadState *Thread) {
     // Let's do some initial bookkeeping here
     Thread->ThreadManager.TID = FHU::Syscalls::gettid();
+#ifndef _WIN32
     Thread->ThreadManager.PID = ::getpid();
+#else
+    Thread->ThreadManager.PID = ::_getpid();
+#endif
 
     if (Config.BlockJITNaming() ||
         Config.GlobalJITNaming() ||
@@ -605,6 +610,7 @@ namespace FEXCore::Context {
       Threads.push_back(Thread);
     }
 
+    InitializeThreadTLSData(Thread);
     return Thread;
   }
 
@@ -998,6 +1004,11 @@ namespace FEXCore::Context {
   }
 
   void ContextImpl::CompileBlockJit(FEXCore::Core::CpuStateFrame *Frame, uint64_t GuestRIP) {
+#ifdef _M_ARM_64EC
+    if (Frame->Thread->LookupCache->CheckPageEC(GuestRIP))
+      return;
+#endif
+
     auto NewBlock = CompileBlock(Frame, GuestRIP);
 
     if (NewBlock == 0) {
@@ -1006,6 +1017,7 @@ namespace FEXCore::Context {
       Frame->Thread->StatusCode = 128 + SIGILL;
       Stop(false /* Ignore current thread */);
     }
+      LogMan::Msg::EFmt("CompileBlockJit: Compile {:X} {:X}", GuestRIP, (uintptr_t)NewBlock);
   }
 
   uintptr_t ContextImpl::CompileBlock(FEXCore::Core::CpuStateFrame *Frame, uint64_t GuestRIP, uint64_t MaxInst) {
