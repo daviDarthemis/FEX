@@ -64,16 +64,11 @@ void Dispatcher::EmitDispatcher() {
 
   DispatchPtr = GetCursorAddress<AsmDispatch>();
 
-  // while (true) {
-  //    Ptr = FindBlock(RIP)
-  //    if (!Ptr)
-  //      Ptr = CTX->CompileBlock(RIP);
-  //
-  //    Ptr();
-  // }
-
   ARMEmitter::ForwardLabel l_CTX;
   ARMEmitter::SingleUseForwardLabel l_Sleep;
+#ifdef _M_ARM_64EC
+  ARMEmitter::SingleUseForwardLabel ExitEC;
+#endif
   ARMEmitter::SingleUseForwardLabel l_CompileBlock;
 
   // Push all the register we need to save
@@ -93,6 +88,13 @@ void Dispatcher::EmitDispatcher() {
 
   FillStaticRegs();
 
+  // while (true) {
+  //    Ptr = FindBlock(RIP)
+  //    if (!Ptr)
+  //      Ptr = CTX->CompileBlock(RIP);
+  //
+  //    Ptr();
+  // }
   // We want to ensure that we are 16 byte aligned at the top of this loop
   Align16B();
   ARMEmitter::BiDirectionalLabel FullLookup{};
@@ -147,6 +149,9 @@ void Dispatcher::EmitDispatcher() {
 
     // If page pointer is zero then we have no block
     cbz(ARMEmitter::Size::i64Bit, TMP1, &NoBlock);
+#ifdef _M_ARM_64EC
+    tbnz(TMP1, 0, &ExitEC);
+#endif
 
     // Steal the page offset
     and_(ARMEmitter::Size::i64Bit, TMP2, TMP4, 0x0FFF);
@@ -179,6 +184,14 @@ void Dispatcher::EmitDispatcher() {
       br(TMP4);
     }
   }
+
+#ifdef _M_ARM_64EC
+  {
+    Bind(&ExitEC);
+    ldr(TMP2, STATE_PTR(CpuStateFrame, Pointers.Common.ExitFunctionEC));
+    br(TMP2);
+  }
+#endif
 
   {
     ThreadStopHandlerAddressSpillSRA = GetCursorAddress<uint64_t>();
