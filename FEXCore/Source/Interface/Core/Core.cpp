@@ -1012,6 +1012,11 @@ namespace FEXCore::Context {
   }
 
   uintptr_t ContextImpl::CompileBlock(FEXCore::Core::CpuStateFrame *Frame, uint64_t GuestRIP, uint64_t MaxInst) {
+#ifdef _M_ARM_64EC
+    if (Frame->Thread->LookupCache->CheckPageEC(GuestRIP))
+      return GuestRIP;
+#endif
+
     FEXCORE_PROFILE_SCOPED("CompileBlock");
     auto Thread = Frame->Thread;
 
