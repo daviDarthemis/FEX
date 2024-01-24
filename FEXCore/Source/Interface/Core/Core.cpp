@@ -774,6 +774,14 @@ namespace FEXCore::Context {
   }
 
   uintptr_t ContextImpl::CompileBlock(FEXCore::Core::CpuStateFrame *Frame, uint64_t GuestRIP, uint64_t MaxInst) {
+#ifdef _M_ARM_64EC
+    // If the target PC is EC code, mark it in the L2 and return straight to the dispatcher
+    // so it can handle the call/return.
+    if (Frame->Thread->LookupCache->CheckPageEC(GuestRIP)) {
+      return GuestRIP;
+    }
+#endif
+
     FEXCORE_PROFILE_SCOPED("CompileBlock");
     auto Thread = Frame->Thread;
 
