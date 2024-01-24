@@ -122,6 +122,13 @@ if (CMAKE_SYSTEM_PROCESSOR MATCHES "^aarch64|^arm64|^armv8\.*")
   add_definitions(-D_M_ARM_64=1)
 endif()
 
+if (CMAKE_SYSTEM_PROCESSOR MATCHES "^arm64ec")
+  set(_M_ARM_64EC 1)
+  add_definitions(-D_M_ARM_64EC=1)
+  # Required as FEX is not allowed to lock the heap lock during compilation or callbacks
+  set(ENABLE_JEMALLOC TRUE)
+endif()
+
 if (ENABLE_CCACHE)
   find_program(CCACHE_PROGRAM ccache)
   if(CCACHE_PROGRAM)
