@@ -62,6 +62,8 @@ void Dispatcher::EmitDispatcher() {
   ARMEmitter::ForwardLabel l_CTX;
   ARMEmitter::SingleUseForwardLabel l_Sleep;
 #ifdef _M_ARM_64EC
+  static constexpr size_t TEBCPUAreaOffset = 0x1788;
+  static constexpr size_t CPUAreaInSyscallCallbackOffset = 0x1;
   ARMEmitter::SingleUseForwardLabel ExitEC;
 #endif
   ARMEmitter::SingleUseForwardLabel l_CompileBlock;
@@ -205,6 +207,13 @@ void Dispatcher::EmitDispatcher() {
     add(ARMEmitter::Size::i64Bit, ARMEmitter::XReg::x0, ARMEmitter::XReg::x0, 1);
     str(ARMEmitter::XReg::x0, STATE, offsetof(FEXCore::Core::CPUState, DeferredSignalRefCount));
 
+#ifdef _M_ARM_64EC
+    // Disable NTDLL syscall callbacks when compiling
+    ldr(ARMEmitter::XReg::x0, ARMEmitter::XReg::x18, TEBCPUAreaOffset);
+    LoadConstant(ARMEmitter::Size::i32Bit, ARMEmitter::Reg::r1, 1);
+    strb(ARMEmitter::WReg::w1, ARMEmitter::XReg::x0, CPUAreaInSyscallCallbackOffset);
+#endif
+
     mov(ARMEmitter::XReg::x0, STATE);
     mov(ARMEmitter::XReg::x1, ARMEmitter::XReg::lr);
 
@@ -221,6 +230,11 @@ void Dispatcher::EmitDispatcher() {
     }
 
     FillStaticRegs();
+
+#ifdef _M_ARM_64EC
+    ldr(TMP2, ARMEmitter::XReg::x18, TEBCPUAreaOffset);
+    strb(ARMEmitter::WReg::zr, TMP2, CPUAreaInSyscallCallbackOffset);
+#endif
 
     ldr(TMP2, STATE, offsetof(FEXCore::Core::CPUState, DeferredSignalRefCount));
     sub(ARMEmitter::Size::i64Bit, TMP2, TMP2, 1);
@@ -247,6 +261,13 @@ void Dispatcher::EmitDispatcher() {
     add(ARMEmitter::Size::i64Bit, ARMEmitter::XReg::x0, ARMEmitter::XReg::x0, 1);
     str(ARMEmitter::XReg::x0, STATE, offsetof(FEXCore::Core::CPUState, DeferredSignalRefCount));
 
+#ifdef _M_ARM_64EC
+    // Disable NTDLL syscall callbacks when compiling
+    ldr(ARMEmitter::XReg::x0, ARMEmitter::XReg::x18, TEBCPUAreaOffset);
+    LoadConstant(ARMEmitter::Size::i32Bit, ARMEmitter::Reg::r1, 1);
+    strb(ARMEmitter::WReg::w1, ARMEmitter::XReg::x0, CPUAreaInSyscallCallbackOffset);
+#endif
+
     ldr(ARMEmitter::XReg::x0, &l_CTX);
     mov(ARMEmitter::XReg::x1, STATE);
     // x2 contains guest RIP
@@ -261,6 +282,11 @@ void Dispatcher::EmitDispatcher() {
     }
 
     FillStaticRegs();
+
+#ifdef _M_ARM_64EC
+    ldr(TMP1, ARMEmitter::XReg::x18, TEBCPUAreaOffset);
+    strb(ARMEmitter::WReg::zr, TMP1, CPUAreaInSyscallCallbackOffset);
+#endif
 
     ldr(TMP1, STATE, offsetof(FEXCore::Core::CPUState, DeferredSignalRefCount));
     sub(ARMEmitter::Size::i64Bit, TMP1, TMP1, 1);
