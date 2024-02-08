@@ -353,7 +353,11 @@ namespace FEXCore::Context {
   void ContextImpl::InitializeThreadTLSData(FEXCore::Core::InternalThreadState *Thread) {
     // Let's do some initial bookkeeping here
     Thread->ThreadManager.TID = FHU::Syscalls::gettid();
+#ifndef _WIN32
     Thread->ThreadManager.PID = ::getpid();
+#else
+    Thread->ThreadManager.PID = ::_getpid();
+#endif
 
     if (ThunkHandler) {
       ThunkHandler->RegisterTLSState(Thread);

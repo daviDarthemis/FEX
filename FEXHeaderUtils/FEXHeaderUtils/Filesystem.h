@@ -27,11 +27,19 @@ namespace FHU::Filesystem {
    * @return True if the file exists, False if it doesn't.
    */
   inline bool Exists(const char *Path) {
+#ifndef _WIN32
     return access(Path, F_OK) == 0;
+#else
+    return _access(Path, F_OK) == 0;
+#endif
   }
 
   inline bool Exists(const fextl::string &Path) {
+#ifndef _WIN32
     return access(Path.c_str(), F_OK) == 0;
+#else
+    return _access(Path.c_str(), F_OK) == 0;
+#endif
   }
 
 #ifndef _WIN32

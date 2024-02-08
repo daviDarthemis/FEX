@@ -12,7 +12,11 @@ namespace FEXCore {
 
   JITSymbols::~JITSymbols() {
     if (fd != -1) {
+#ifndef _WIN32
       close(fd);
+#else
+      _close(fd);
+#endif
     }
   }
 
@@ -22,9 +26,17 @@ namespace FEXCore {
     // Android simpleperf looks in /data/local/tmp instead of /tmp
     const auto PerfMap = fextl::fmt::format("/data/local/tmp/perf-{}.map", getpid());
 #else
+#ifndef _WIN32
     const auto PerfMap = fextl::fmt::format("/tmp/perf-{}.map", getpid());
+#else
+    const auto PerfMap = fextl::fmt::format("/tmp/perf-{}.map", _getpid());
 #endif
+#endif
+#ifndef _WIN32
     fd = open(PerfMap.c_str(), O_CREAT | O_TRUNC | O_WRONLY | O_APPEND, 0644);
+#else
+    fd = _open(PerfMap.c_str(), O_CREAT | O_TRUNC | O_WRONLY | O_APPEND, 0644);
+#endif
   }
 
   void JITSymbols::RegisterNamedRegion(const void *HostAddr, uint32_t CodeSize, std::string_view Name) {
@@ -33,7 +45,11 @@ namespace FEXCore {
     // Linux perf format is very straightforward
     // `<HostPtr> <Size> <Name>\n`
     const auto Buffer = fextl::fmt::format("{} {:x} {}\n", HostAddr, CodeSize, Name);
+#ifndef _WIN32
     auto Result = write(fd, Buffer.c_str(), Buffer.size());
+#else
+    auto Result = _write(fd, Buffer.c_str(), Buffer.size());
+#endif
     if (Result == -1 && errno == EBADF) {
       fd = -1;
     }
@@ -45,7 +61,11 @@ namespace FEXCore {
     // Linux perf format is very straightforward
     // `<HostPtr> <Size> <Name>\n`
     const auto Buffer = fextl::fmt::format("{} {:x} FEXJIT\n", HostAddr, CodeSize);
+#ifndef _WIN32
     auto Result = write(fd, Buffer.c_str(), Buffer.size());
+#else
+    auto Result = _write(fd, Buffer.c_str(), Buffer.size());
+#endif
     if (Result == -1 && errno == EBADF) {
       fd = -1;
     }
@@ -129,7 +149,11 @@ namespace FEXCore {
     }
 
     Buffer->LastWrite = Now;
+#ifndef _WIN32
     auto Result = write(fd, Buffer->Buffer, Buffer->Offset);
+#else
+    auto Result = _write(fd, Buffer->Buffer, Buffer->Offset);
+#endif
     if (Result == -1 && errno == EBADF) {
       fd = -1;
     }
