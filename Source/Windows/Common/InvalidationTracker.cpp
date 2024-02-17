@@ -2,6 +2,7 @@
 
 #include <FEXCore/Utils/LogManager.h>
 #include <FEXCore/Utils/TypeDefines.h>
+#include <FEXCore/Utils/SignalScopeGuards.h>
 #include <FEXCore/Core/Context.h>
 #include <FEXCore/Debug/InternalThreadState.h>
 #include "InvalidationTracker.h"
@@ -9,12 +10,18 @@
 #include <winternl.h>
 
 namespace FEX::Windows {
+InvalidationTracker::InvalidationTracker(FEXCore::Context::Context &CTX,
+    const std::unordered_map<DWORD, FEXCore::Core::InternalThreadState *> &Threads) : CTX{CTX}, Threads{Threads} {}
+
 void InvalidationTracker::HandleMemoryProtectionNotification(FEXCore::Core::InternalThreadState *Thread, uint64_t Address, uint64_t Size, ULONG Prot) {
   const auto AlignedBase = Address & FEXCore::Utils::FEX_PAGE_MASK;
   const auto AlignedSize = (Address - AlignedBase + Size + FEXCore::Utils::FEX_PAGE_SIZE - 1) & FEXCore::Utils::FEX_PAGE_MASK;
 
   if (Prot & (PAGE_EXECUTE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE)) {
-    Thread->CTX->InvalidateGuestCodeRange(Thread, AlignedBase, AlignedSize);
+    std::scoped_lock Lock(CTX.GetCodeInvalidationMutex());
+    for (auto Thread : Threads) {
+      CTX.InvalidateGuestCodeRange(Thread.second, AlignedBase, AlignedSize);
+    }
   }
 
   if (Prot & PAGE_EXECUTE_READWRITE) {
@@ -27,7 +34,7 @@ void InvalidationTracker::HandleMemoryProtectionNotification(FEXCore::Core::Inte
   }
 }
 
-void InvalidationTracker::InvalidateContainingSection(FEXCore::Core::InternalThreadState *Thread, uint64_t Address, bool Free) {
+void InvalidationTracker::InvalidateContainingSection(uint64_t Address, bool Free) {
   MEMORY_BASIC_INFORMATION Info;
   if (NtQueryVirtualMemory(NtCurrentProcess(), reinterpret_cast<void *>(Address), MemoryBasicInformation, &Info, sizeof(Info), nullptr))
     return;
@@ -35,7 +42,13 @@ void InvalidationTracker::InvalidateContainingSection(FEXCore::Core::InternalThr
   const auto SectionBase = reinterpret_cast<uint64_t>(Info.AllocationBase);
   const auto SectionSize = reinterpret_cast<uint64_t>(Info.BaseAddress) + Info.RegionSize
                            - reinterpret_cast<uint64_t>(Info.AllocationBase);
-  Thread->CTX->InvalidateGuestCodeRange(Thread, SectionBase, SectionSize);
+
+  {
+    std::scoped_lock Lock(CTX.GetCodeInvalidationMutex());
+    for (auto Thread : Threads) {
+      CTX.InvalidateGuestCodeRange(Thread.second, SectionBase, SectionSize);
+    }
+  }
 
   if (Free) {
     std::scoped_lock Lock(RWXIntervalsLock);
@@ -46,7 +59,13 @@ void InvalidationTracker::InvalidateContainingSection(FEXCore::Core::InternalThr
 void InvalidationTracker::InvalidateAlignedInterval(FEXCore::Core::InternalThreadState *Thread, uint64_t Address, uint64_t Size, bool Free) {
   const auto AlignedBase = Address & FEXCore::Utils::FEX_PAGE_MASK;
   const auto AlignedSize = (Address - AlignedBase + Size + FEXCore::Utils::FEX_PAGE_SIZE - 1) & FEXCore::Utils::FEX_PAGE_MASK;
-  Thread->CTX->InvalidateGuestCodeRange(Thread, AlignedBase, AlignedSize);
+
+  {
+    std::scoped_lock Lock(CTX.GetCodeInvalidationMutex());
+    for (auto Thread : Threads) {
+      CTX.InvalidateGuestCodeRange(Thread.second, AlignedBase, AlignedSize);
+    }
+  }
 
   if (Free) {
     std::scoped_lock Lock(RWXIntervalsLock);
@@ -74,7 +93,7 @@ void InvalidationTracker::ReprotectRWXIntervals(uint64_t Address, uint64_t Size)
   } while (Address < End);
 }
 
-bool InvalidationTracker::HandleRWXAccessViolation(FEXCore::Core::InternalThreadState *Thread, uint64_t FaultAddress) {
+bool InvalidationTracker::HandleRWXAccessViolation(uint64_t FaultAddress) {
   const bool NeedsInvalidate = [&](uint64_t Address) {
     std::unique_lock Lock(RWXIntervalsLock);
     const bool Enclosed = RWXIntervals.Query(Address).Enclosed;
@@ -91,7 +110,10 @@ bool InvalidationTracker::HandleRWXAccessViolation(FEXCore::Core::InternalThread
 
   if (NeedsInvalidate) {
     // RWXIntervalsLock cannot be held during invalidation
-    Thread->CTX->InvalidateGuestCodeRange(Thread, FaultAddress & FEXCore::Utils::FEX_PAGE_MASK, FEXCore::Utils::FEX_PAGE_SIZE);
+    std::scoped_lock Lock(CTX.GetCodeInvalidationMutex());
+    for (auto Thread : Threads) {
+      CTX.InvalidateGuestCodeRange(Thread.second, FaultAddress & FHU::FEX_PAGE_MASK, FHU::FEX_PAGE_SIZE);
+    }
     return true;
   }
   return false;
