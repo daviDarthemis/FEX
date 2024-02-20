@@ -14,6 +14,7 @@ endfunction()
 
 build_implib(ntdll)
 build_implib(wow64)
+build_implib(kernelbase)
 
 add_subdirectory(Common)
 
