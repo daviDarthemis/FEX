@@ -5,7 +5,7 @@
 
 namespace FEX::Windows {
 CPUFeatures::CPUFeatures(FEXCore::Context::Context &CTX) {
-  CpuInfo.ProcessorArchitecture = PROCESSOR_ARCHITECTURE_INTEL;
+  CpuInfo.ProcessorArchitecture = PROCESSOR_ARCHITECTURE_AMD64; // CHECK
 
   // Baseline FEX feature-set
   CpuInfo.ProcessorFeatureBits = CPU_FEATURE_VME | CPU_FEATURE_TSC | CPU_FEATURE_CMOV | CPU_FEATURE_PGE |
