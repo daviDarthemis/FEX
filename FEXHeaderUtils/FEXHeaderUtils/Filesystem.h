@@ -19,6 +19,12 @@
 #include <unistd.h>
 
 namespace FHU::Filesystem {
+#ifdef _WIN32
+  inline fextl::string PathToString(const std::filesystem::path &path) {
+    return path.string<char, std::char_traits<char>, fextl::FEXAlloc<char>>();
+  }
+#endif
+
   /**
    * @brief Check if a filepath exists.
    *
@@ -101,6 +107,7 @@ namespace FHU::Filesystem {
    *
    * @return True if the directory tree was created or already exists.
    */
+#ifndef _WIN32
   inline bool CreateDirectories(const fextl::string &Path) {
     // Try to create the directory initially.
     if (CreateDirectory(Path) != CreateDirectoryResult::ERROR) {
@@ -108,12 +115,19 @@ namespace FHU::Filesystem {
     }
 
     // Walk the path in reverse and create paths as we go.
-    fextl::string TmpPath {Path.substr(0, Path.rfind('/', Path.size() - 1))};
+    size_t LastSeparator{Path.rfind('/', Path.size() - 1)};
+    fextl::string TmpPath {Path.substr(0, LastSeparator)};
     if (!TmpPath.empty() && CreateDirectories(TmpPath)) {
       return CreateDirectory(Path) != CreateDirectoryResult::ERROR;
     }
     return false;
   }
+#else
+  inline bool CreateDirectories(const fextl::string &Path) {
+    std::error_code ec;
+    return std::filesystem::exists(Path, ec) || std::filesystem::create_directories(Path, ec);
+  }
+#endif
 
   /**
    * @brief Extracts the filename component from a file path.
@@ -122,6 +136,7 @@ namespace FHU::Filesystem {
    *
    * @return The filename component of the path.
    */
+#ifndef _WIN32
   inline fextl::string GetFilename(const fextl::string &Path) {
     auto LastSeparator = Path.rfind('/');
     if (LastSeparator == fextl::string::npos) {
@@ -131,10 +146,15 @@ namespace FHU::Filesystem {
 
     return Path.substr(LastSeparator + 1);
   }
+#else
+  inline fextl::string GetFilename(const fextl::string &Path) {
+    return PathToString(std::filesystem::path(Path).filename());
+  }
+#endif
 
+#ifndef _WIN32
   inline fextl::string ParentPath(const fextl::string &Path) {
     auto LastSeparator = Path.rfind('/');
-
     if (LastSeparator == fextl::string::npos) {
       // No separator. Likely relative `.`, `..`, `<Application Name>`, or empty string.
       if (Path == "." || Path == "..") {
@@ -159,7 +179,13 @@ namespace FHU::Filesystem {
 
     return SubString;
   }
+#else
+  inline fextl::string ParentPath(const fextl::string &Path) {
+    return PathToString(std::filesystem::path(Path).parent_path());
+  }
+#endif
 
+#ifndef _WIN32
   inline bool IsRelative(const std::string_view Path) {
     return !Path.starts_with('/');
   }
@@ -167,6 +193,15 @@ namespace FHU::Filesystem {
   inline bool IsAbsolute(const std::string_view Path) {
     return Path.starts_with('/');
   }
+#else
+  inline bool IsRelative(const std::string_view Path) {
+    return std::filesystem::path(Path).is_relative();
+  }
+
+  inline bool IsAbsolute(const std::string_view Path) {
+    return std::filesystem::path(Path).is_absolute();
+  }
+#endif
 
   enum class CopyOptions {
     NONE,
@@ -246,7 +281,6 @@ namespace FHU::Filesystem {
     std::error_code ec;
     return std::filesystem::copy_file(From, To, options, ec);
   }
-
 #endif
 
   /**
@@ -258,6 +292,7 @@ namespace FHU::Filesystem {
     return rename(From.c_str(), To.c_str()) == 0 ? std::error_code{} : std::make_error_code(std::errc::io_error);
   }
 
+#ifndef _WIN32
   inline fextl::string LexicallyNormal(const fextl::string &Path) {
     const auto PathSize = Path.size();
 
@@ -360,6 +395,12 @@ namespace FHU::Filesystem {
       fmt::join(Parts, "/"),
       NeedsFinalSeparator ? "/" : "");
   }
+#else
+  inline fextl::string LexicallyNormal(const fextl::string &Path) {
+    return PathToString(std::filesystem::path(Path).lexically_normal());
+  }
+
+#endif
 
 #ifndef _WIN32
   inline char *Absolute(const char *Path, char Fill[PATH_MAX]) {
