@@ -6757,7 +6757,7 @@
       ]
     },
     "fucompp": {
-      "ExpectedInstructionCount": 57,
+      "ExpectedInstructionCount": 58,
       "Comment": [
         "0xda 11b 0xe9 /5"
       ],
@@ -6811,6 +6811,7 @@
         "ldrb w22, [x28, #1026]",
         "lsl w23, w21, w20",
         "bic w22, w22, w23",
+        "strb w22, [x28, #1026]",
         "add w20, w20, #0x1 (1)",
         "and w20, w20, #0x7",
         "lsl w21, w21, w20",
@@ -14680,7 +14681,7 @@
       ]
     },
     "fcompp": {
-      "ExpectedInstructionCount": 57,
+      "ExpectedInstructionCount": 58,
       "Comment": [
         "0xde 11b 0xd9 /3"
       ],
@@ -14734,6 +14735,7 @@
         "ldrb w22, [x28, #1026]",
         "lsl w23, w21, w20",
         "bic w22, w22, w23",
+        "strb w22, [x28, #1026]",
         "add w20, w20, #0x1 (1)",
         "and w20, w20, #0x7",
         "lsl w21, w21, w20",
