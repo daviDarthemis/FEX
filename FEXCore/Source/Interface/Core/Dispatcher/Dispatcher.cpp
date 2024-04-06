@@ -208,7 +208,6 @@ void Dispatcher::EmitDispatcher() {
     str(ARMEmitter::XReg::x0, STATE, offsetof(FEXCore::Core::CPUState, DeferredSignalRefCount));
 
 #ifdef _M_ARM_64EC
-    // Disable NTDLL syscall callbacks when compiling
     ldr(ARMEmitter::XReg::x0, ARMEmitter::XReg::x18, TEBCPUAreaOffset);
     LoadConstant(ARMEmitter::Size::i32Bit, ARMEmitter::Reg::r1, 1);
     strb(ARMEmitter::WReg::w1, ARMEmitter::XReg::x0, CPUAreaInSyscallCallbackOffset);
