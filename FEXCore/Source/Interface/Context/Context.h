@@ -17,6 +17,7 @@
 #include <FEXCore/Utils/CompilerDefs.h>
 #include <FEXCore/Utils/Event.h>
 #include <FEXCore/Utils/SignalScopeGuards.h>
+#include <FEXCore/Utils/IntervalList.h>
 #include <FEXCore/fextl/memory.h>
 #include <FEXCore/fextl/set.h>
 #include <FEXCore/fextl/string.h>
@@ -182,6 +183,7 @@ namespace FEXCore::Context {
       }
 
       void MarkMemoryShared(FEXCore::Core::InternalThreadState *Thread) override;
+      void AddNoTSOCodeRange(uint64_t Start, uint64_t Length) override;
 
       void ConfigureAOTGen(FEXCore::Core::InternalThreadState *Thread, fextl::set<uint64_t> *ExternalBranches, uint64_t SectionMaxAddress) override;
 
@@ -339,7 +341,9 @@ namespace FEXCore::Context {
     FEXCore::Utils::PooledAllocatorVirtual FrontendAllocator;
 
     // If Atomic-based TSO emulation is enabled or not.
-    bool IsAtomicTSOEnabled() const { return AtomicTSOEmulationEnabled; }
+    bool IsAtomicTSOEnabled(uint64_t Address) const {
+      return AtomicTSOEmulationEnabled && !NoTSORanges.Intersect({Address, Address + 1});
+    }
 
     void SetHardwareTSOSupport(bool HardwareTSOSupported) override {
       SupportsHardwareTSO = HardwareTSOSupported;
@@ -397,6 +401,7 @@ namespace FEXCore::Context {
     bool IsMemoryShared = false;
     bool SupportsHardwareTSO = false;
     bool AtomicTSOEmulationEnabled = true;
+    IntervalList<uint64_t> NoTSORanges;
     bool ExitOnHLT = false;
     FEX_CONFIG_OPT(AppFilename, APP_FILENAME);
 

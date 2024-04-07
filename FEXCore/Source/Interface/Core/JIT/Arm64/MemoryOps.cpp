@@ -1325,7 +1325,7 @@ DEF_OP(VLoadVectorElement) {
   }
 
   // Emit a half-barrier if TSO is enabled.
-  if (CTX->IsAtomicTSOEnabled() && VectorTSOEnabled()) {
+  if (CTX->IsAtomicTSOEnabled(Entry) && VectorTSOEnabled()) {
     dmb(ARMEmitter::BarrierScope::ISHLD);
   }
 }
@@ -1345,7 +1345,7 @@ DEF_OP(VStoreVectorElement) {
                       ElementSize == 16, "Invalid element size");
 
   // Emit a half-barrier if TSO is enabled.
-  if (CTX->IsAtomicTSOEnabled() && VectorTSOEnabled()) {
+  if (CTX->IsAtomicTSOEnabled(Entry) && VectorTSOEnabled()) {
     dmb(FEXCore::ARMEmitter::BarrierScope::ISH);
   }
 
@@ -1445,7 +1445,7 @@ DEF_OP(VBroadcastFromMem) {
   }
 
   // Emit a half-barrier if TSO is enabled.
-  if (CTX->IsAtomicTSOEnabled() && VectorTSOEnabled()) {
+  if (CTX->IsAtomicTSOEnabled(Entry) && VectorTSOEnabled()) {
     dmb(ARMEmitter::BarrierScope::ISHLD);
   }
 }

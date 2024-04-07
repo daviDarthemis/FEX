@@ -51,6 +51,8 @@ namespace FEXCore::Threads {
 #ifndef _WIN32
     ::syscall(SYS_rt_sigprocmask, SIG_SETMASK, &Mask, &Mask, 8);
     return Mask;
+#else
+    return 0;
 #endif
   }
 

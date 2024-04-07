@@ -13,7 +13,7 @@ namespace FEX::Windows {
 InvalidationTracker::InvalidationTracker(FEXCore::Context::Context &CTX,
     const std::unordered_map<DWORD, FEXCore::Core::InternalThreadState *> &Threads) : CTX{CTX}, Threads{Threads} {}
 
-void InvalidationTracker::HandleMemoryProtectionNotification(FEXCore::Core::InternalThreadState *Thread, uint64_t Address, uint64_t Size, ULONG Prot) {
+void InvalidationTracker::HandleMemoryProtectionNotification(uint64_t Address, uint64_t Size, ULONG Prot) {
   const auto AlignedBase = Address & FEXCore::Utils::FEX_PAGE_MASK;
   const auto AlignedSize = (Address - AlignedBase + Size + FEXCore::Utils::FEX_PAGE_SIZE - 1) & FEXCore::Utils::FEX_PAGE_MASK;
 
@@ -56,7 +56,7 @@ void InvalidationTracker::InvalidateContainingSection(uint64_t Address, bool Fre
   }
 }
 
-void InvalidationTracker::InvalidateAlignedInterval(FEXCore::Core::InternalThreadState *Thread, uint64_t Address, uint64_t Size, bool Free) {
+void InvalidationTracker::InvalidateAlignedInterval(uint64_t Address, uint64_t Size, bool Free) {
   const auto AlignedBase = Address & FEXCore::Utils::FEX_PAGE_MASK;
   const auto AlignedSize = (Address - AlignedBase + Size + FEXCore::Utils::FEX_PAGE_SIZE - 1) & FEXCore::Utils::FEX_PAGE_MASK;
 
@@ -112,7 +112,7 @@ bool InvalidationTracker::HandleRWXAccessViolation(uint64_t FaultAddress) {
     // RWXIntervalsLock cannot be held during invalidation
     std::scoped_lock Lock(CTX.GetCodeInvalidationMutex());
     for (auto Thread : Threads) {
-      CTX.InvalidateGuestCodeRange(Thread.second, FaultAddress & FHU::FEX_PAGE_MASK, FHU::FEX_PAGE_SIZE);
+      CTX.InvalidateGuestCodeRange(Thread.second, FaultAddress & FEXCore::Utils::FEX_PAGE_MASK, FEXCore::Utils::FEX_PAGE_SIZE);
     }
     return true;
   }
