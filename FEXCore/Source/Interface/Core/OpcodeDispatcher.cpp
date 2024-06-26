@@ -3236,7 +3236,7 @@ void OpDispatchBuilder::STOSOp(OpcodeArgs) {
 
     Ref Counter = LoadGPRRegister(X86State::REG_RCX);
 
-    auto Result = _MemSet(CTX->IsAtomicTSOEnabled(), Size, Segment ?: InvalidNode, Dest, Src, Counter, LoadDir(1));
+    auto Result = _MemSet(CTX->IsAtomicTSOEnabled(Entry), Size, Segment ?: InvalidNode, Dest, Src, Counter, LoadDir(1));
     StoreGPRRegister(X86State::REG_RCX, _Constant(0));
     StoreGPRRegister(X86State::REG_RDI, Result);
   }
@@ -3268,7 +3268,7 @@ void OpDispatchBuilder::MOVSOp(OpcodeArgs) {
       SrcAddr = _Add(OpSize::i64Bit, SrcAddr, SrcSegment);
     }
 
-    auto Result = _MemCpy(CTX->IsAtomicTSOEnabled(), Size, DstAddr, SrcAddr, Counter, LoadDir(1));
+    auto Result = _MemCpy(CTX->IsAtomicTSOEnabled(Entry), Size, DstAddr, SrcAddr, Counter, LoadDir(1));
     auto [Result_Dst, Result_Src] = ExtractPair(OpSize::i64Bit, Result);
 
     if (DstSegment) {
